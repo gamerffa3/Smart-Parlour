@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan QR – Smart Parlour</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        body { font-family: system-ui; margin: 0; padding: 20px; background: #0f172a; color: white; text-align: center; }
+        #reader { width: 100%; max-width: 500px; margin: 20px auto; border-radius: 20px; overflow: hidden; }
+        .result { margin: 20px auto; padding: 12px; border-radius: 12px; max-width: 500px; }
+        .success { background: #10b981; }
+        .error { background: #ef4444; }
+        .info { background: #3b82f6; }
+        button { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 30px; margin: 10px; cursor: pointer; }
+        .logout { background: #475569; }
+    </style>
+</head>
+<body>
+    <h2>📷 Scan QR from Staff App</h2>
+    <div id="reader"></div>
+    <div id="result" class="result info">Ready to scan...</div>
+    <button onclick="restartScanner()">Restart Scanner</button>
+    <button class="logout" onclick="logout()">Logout</button>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBDgK7qgbk3p5HN38Tq1siEgfvpPkUCmqA",
+            authDomain: "smart-parlour-4d289.firebaseapp.com",
+            projectId: "smart-parlour-4d289",
+            storageBucket: "smart-parlour-4d289.firebasestorage.app",
+            messagingSenderId: "559319368551",
+            appId: "1:559319368551:android:43c6de3dc5ce33e37ea5c2"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let html5QrCode;
+        let scanning = true;
+
+        async function startScanner() {
+            if (html5QrCode) try { await html5QrCode.stop(); } catch(e) {}
+            html5QrCode = new Html5Qrcode("reader");
+            try {
+                await html5QrCode.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 300, height: 300 } },
+                    onScanSuccess,
+                    onScanError
+                );
+            } catch(err) {
+                document.getElementById('result').innerHTML = 'Camera error: ' + err.message;
+                document.getElementById('result').className = 'result error';
+            }
+        }
+
+        async function onScanSuccess(decodedText) {
+            if (!scanning) return;
+            scanning = false;
+            await html5QrCode.stop();
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = 'result info';
+            resultDiv.innerHTML = 'Verifying...';
+
+            try {
+                const qrData = JSON.parse(decodedText);
+                const sessionId = qrData.sessionId;
+                const qrDoc = await db.collection('qr_sessions').doc(sessionId).get();
+                if (!qrDoc.exists) throw new Error('Invalid QR code');
+                const session = qrDoc.data();
+                const expiry = session.expiryTime.toDate();
+                if (new Date() > expiry) throw new Error('QR code expired (15s)');
+                if (session.isUsed) throw new Error('QR code already used');
+                // Mark session as used
+                await db.collection('qr_sessions').doc(sessionId).update({ isUsed: true, usedAt: new Date() });
+                // Mark attendance
+                const staffId = session.staffId;
+                const now = new Date();
+                const date = now.toISOString().split('T')[0];
+                const time = now.toLocaleTimeString();
+                const dateDisplay = now.toLocaleDateString();
+                const day = now.toLocaleDateString(undefined, { weekday: 'long' });
+                // Get per day salary from settings (or use default)
+                const settingsDoc = await db.collection('settings').doc('appSettings').get();
+                const defaultSalary = settingsDoc.data()?.defaultSalary || 15000;
+                const workingDays = settingsDoc.data()?.workingDays || 26;
+                const perDaySalary = Math.floor(defaultSalary / workingDays);
+                await db.collection('attendance').add({
+                    staffId: staffId,
+                    staffName: session.staffName,
+                    date: date,
+                    dateDisplay: dateDisplay,
+                    day: day,
+                    time: time,
+                    status: 'Present ✅',
+                    timestamp: new Date(),
+                    bonus: 0,
+                    penalty: 0,
+                    dailyEarning: perDaySalary
+                });
+                // Update staff record
+                const staffRef = db.collection('staff').doc(staffId);
+                const staffDoc = await staffRef.get();
+                const totalDays = (staffDoc.data()?.totalDays || 0) + 1;
+                await staffRef.update({ totalDays: totalDays, lastDate: date, lastTime: time });
+                resultDiv.innerHTML = `✅ Attendance marked for ${session.staffName} at ${time}`;
+                resultDiv.className = 'result success';
+            } catch(err) {
+                resultDiv.innerHTML = `❌ ${err.message}`;
+                resultDiv.className = 'result error';
+            }
+            // Auto restart scanner after 4 seconds
+            setTimeout(() => {
+                scanning = true;
+                startScanner();
+                resultDiv.innerHTML = 'Ready to scan...';
+                resultDiv.className = 'result info';
+            }, 4000);
+        }
+
+        function onScanError(err) { console.log(err); }
+        function restartScanner() { scanning = true; startScanner(); }
+        function logout() { localStorage.clear(); window.location.href = 'index.html'; }
+
+        window.onload = () => {
+            if (!localStorage.getItem('staffId')) {
+                window.location.href = 'index.html';
+                return;
+            }
+            startScanner();
+        };
+    </script>
+</body>
+</html>
