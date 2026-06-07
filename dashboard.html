@@ -3,213 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Parlour | QR Scanner</title>
+    <title>Smart Parlour – Login</title>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f7fa;
-        }
-        .header {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: white;
-            padding: 20px 30px;
+            min-height: 100vh;
             display: flex;
-            justify-content: space-between;
+            justify-content: center;
             align-items: center;
-            flex-wrap: wrap;
         }
-        .logo {
-            font-size: 20px;
-            font-weight: bold;
-        }
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .logout-btn {
-            background: rgba(255,255,255,0.2);
-            border: none;
-            padding: 8px 16px;
-            border-radius: 8px;
-            color: white;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .logout-btn:hover {
-            background: rgba(255,255,255,0.3);
-        }
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 30px;
-        }
-        .scanner-section {
+        .card {
             background: white;
-            border-radius: 20px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        }
-        .section-title {
-            font-size: 20px;
-            font-weight: 600;
-            color: #1a1a2e;
-            margin-bottom: 20px;
-        }
-        .scanner-wrapper {
-            display: flex;
-            gap: 30px;
-            flex-wrap: wrap;
-        }
-        .scanner-box {
-            flex: 1;
-            min-width: 300px;
-        }
-        .camera-preview {
-            background: #f0f0f0;
-            border-radius: 16px;
-            overflow: hidden;
-        }
-        #reader {
+            border-radius: 32px;
+            padding: 40px;
             width: 100%;
-            border-radius: 16px;
-        }
-        .permission-warning {
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            border-radius: 12px;
-            padding: 20px;
+            max-width: 400px;
             text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
         }
-        .permission-warning button {
-            background: #007bff;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            margin-top: 10px;
-            cursor: pointer;
-        }
-        .scan-result {
-            flex: 1;
-            min-width: 300px;
-        }
-        .result-card {
-            background: #f8f9fa;
-            border-radius: 16px;
-            padding: 20px;
-        }
-        .result-success {
-            background: #d4edda;
-            border: 1px solid #28a745;
-            color: #155724;
-        }
-        .result-error {
-            background: #f8d7da;
-            border: 1px solid #dc3545;
-            color: #721c24;
-        }
-        .result-info {
-            background: #d1ecf1;
-            border: 1px solid #17a2b8;
-            color: #0c5460;
-        }
-        .recent-section {
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        }
-        .recent-table {
+        h1 { font-size: 28px; margin-bottom: 8px; color: #1a1a2e; }
+        .sub { color: #666; margin-bottom: 30px; }
+        input {
             width: 100%;
-            border-collapse: collapse;
+            padding: 14px;
+            border: 1px solid #ddd;
+            border-radius: 16px;
+            font-size: 16px;
+            margin-bottom: 20px;
         }
-        .recent-table th, .recent-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #eee;
-        }
-        .recent-table th {
-            font-weight: 600;
-            color: #666;
-            font-size: 13px;
-        }
-        .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
-            background: #d4edda;
-            color: #155724;
-        }
-        .refresh-btn {
-            background: #6c757d;
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            padding: 8px 16px;
-            border-radius: 8px;
+            border-radius: 16px;
+            font-size: 16px;
+            font-weight: 600;
             cursor: pointer;
-            margin-bottom: 20px;
-            font-size: 14px;
         }
-        @media (max-width: 768px) {
-            .container { padding: 15px; }
-            .header { padding: 15px; }
-            .scanner-section { padding: 20px; }
-        }
+        .error { color: #d33; margin-top: 15px; font-size: 14px; }
+        .info { margin-top: 20px; font-size: 12px; color: #888; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="logo">Smart Parlour QR Scanner</div>
-        <div class="user-info">
-            <span id="userEmail">Loading...</span>
-            <button class="logout-btn" onclick="logout()">Logout</button>
-        </div>
-    </div>
-    <div class="container">
-        <div class="scanner-section">
-            <div class="section-title">QR Code Scanner</div>
-            <div class="scanner-wrapper">
-                <div class="scanner-box">
-                    <div id="cameraContainer" class="camera-preview">
-                        <div id="reader"></div>
-                    </div>
-                    <div id="permissionWarning" style="display: none;" class="permission-warning">
-                        <p>Camera access is required to scan QR codes.</p>
-                        <button onclick="requestCameraPermission()">Enable Camera</button>
-                    </div>
-                </div>
-                <div class="scan-result">
-                    <div id="scanResult" class="result-card result-info">
-                        Ready to scan QR code...
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="recent-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <div class="section-title">Recent Attendance Records</div>
-                <button class="refresh-btn" onclick="loadRecentActivity()">Refresh</button>
-            </div>
-            <div id="recentTable">
-                <table class="recent-table">
-                    <thead><tr><th>Staff Name</th><th>Time</th><th>Date</th><th>Status</th></tr></thead>
-                    <tbody id="recentBody"><tr><td colspan="4" style="text-align: center;">Loading...</td></tr></tbody>
-                </table>
-            </div>
-        </div>
+    <div class="card">
+        <h1>📱 Smart Parlour</h1>
+        <div class="sub">Login with your registered phone number</div>
+        <input type="tel" id="phoneInput" placeholder="e.g., 9876543210" autocomplete="off">
+        <button id="loginBtn">Login & Scan QR</button>
+        <div id="errorMsg" class="error"></div>
+        <div class="info">Use the same number that was added as staff in the app.</div>
     </div>
 
     <script>
@@ -221,91 +69,32 @@
             messagingSenderId: "559319368551",
             appId: "1:559319368551:android:43c6de3dc5ce33e37ea5c2"
         };
-
         firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
         const db = firebase.firestore();
 
-        let html5QrCode;
-
-        auth.onAuthStateChanged(async (user) => {
-            if (!user) { window.location.href = 'index.html'; return; }
-            document.getElementById('userEmail').textContent = user.email;
-            await loadRecentActivity();
-            startScanner();
-        });
-
-        async function startScanner() {
-            if (html5QrCode) { try { await html5QrCode.stop(); } catch(e) {} }
+        async function login() {
+            const phone = document.getElementById('phoneInput').value.trim();
+            const btn = document.getElementById('loginBtn');
+            const errorDiv = document.getElementById('errorMsg');
+            if (!phone) { errorDiv.innerText = 'Please enter phone number'; return; }
+            btn.disabled = true; btn.innerText = 'Verifying...';
+            errorDiv.innerText = '';
             try {
-                await navigator.mediaDevices.getUserMedia({ video: true });
-                document.getElementById('permissionWarning').style.display = 'none';
-                html5QrCode = new Html5Qrcode("reader");
-                await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 300, height: 300 } }, onScanSuccess, onScanError);
-            } catch (error) {
-                document.getElementById('permissionWarning').style.display = 'block';
+                const staffQuery = await db.collection('staff').where('phone', '==', phone).limit(1).get();
+                if (staffQuery.empty) throw new Error('Phone number not registered in staff list');
+                const staffDoc = staffQuery.docs[0];
+                const staffData = staffDoc.data();
+                localStorage.setItem('staffId', staffDoc.id);
+                localStorage.setItem('staffName', staffData.name);
+                localStorage.setItem('staffPhone', phone);
+                window.location.href = 'scanner.html';
+            } catch (err) {
+                errorDiv.innerText = err.message;
+                btn.disabled = false; btn.innerText = 'Login & Scan QR';
             }
         }
-
-        async function requestCameraPermission() {
-            try {
-                await navigator.mediaDevices.getUserMedia({ video: true });
-                location.reload();
-            } catch(e) { alert('Please enable camera in browser settings'); }
-        }
-
-        async function onScanSuccess(decodedText) {
-            if (html5QrCode) await html5QrCode.stop();
-            const resultDiv = document.getElementById('scanResult');
-            resultDiv.className = 'result-card result-info';
-            resultDiv.innerHTML = 'Processing...';
-
-            try {
-                const qrData = JSON.parse(decodedText);
-                const qrDoc = await db.collection('qr_sessions').doc(qrData.sessionId).get();
-                if (!qrDoc.exists) throw new Error('Invalid QR');
-
-                const session = qrDoc.data();
-                if (new Date() > new Date(session.expiryTime)) throw new Error('QR Expired');
-                if (session.isUsed) throw new Error('QR Already Used');
-                if (session.staffId !== qrData.staffId) throw new Error('Staff mismatch');
-
-                await db.collection('qr_sessions').doc(qrData.sessionId).update({ isUsed: true, usedAt: new Date() });
-
-                const now = new Date();
-                await db.collection('attendance').add({
-                    staffId: session.staffId, staffName: session.staffName,
-                    date: now.toISOString().split('T')[0],
-                    time: now.toLocaleTimeString(),
-                    status: 'Present', timestamp: new Date()
-                });
-
-                resultDiv.className = 'result-card result-success';
-                resultDiv.innerHTML = `Attendance marked for ${session.staffName}`;
-                await loadRecentActivity();
-                setTimeout(() => startScanner(), 3000);
-            } catch(e) {
-                resultDiv.className = 'result-card result-error';
-                resultDiv.innerHTML = e.message;
-                setTimeout(() => startScanner(), 3000);
-            }
-        }
-
-        function onScanError(error) { console.log('Scan error:', error); }
-
-        async function loadRecentActivity() {
-            const snapshot = await db.collection('attendance').orderBy('timestamp', 'desc').limit(20).get();
-            const tbody = document.getElementById('recentBody');
-            if (snapshot.empty) { tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No records</td></tr>'; return; }
-            let html = '';
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                html += `<tr><td>${data.staffName || 'Unknown'}</td><td>${data.time || 'N/A'}</td><td>${data.date || 'N/A'}</td><td><span class="status-badge">Present</span></td></tr>`;
-            });
-            tbody.innerHTML = html;
-        }
-
-        async function logout() { await auth.signOut(); window.location.href = 'index.html'; }
+        document.getElementById('loginBtn').onclick = login;
+        document.getElementById('phoneInput').addEventListener('keypress', e => { if (e.key === 'Enter') login(); });
     </script>
 </body>
 </html>
