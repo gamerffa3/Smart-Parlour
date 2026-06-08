@@ -87,6 +87,7 @@
                 localStorage.setItem('staffId', staffDoc.id);
                 localStorage.setItem('staffName', staffData.name);
                 localStorage.setItem('staffPhone', phone);
+                localStorage.setItem('staffUniqueId', staffData.uniqueId);   // ✅ store uniqueId
                 window.location.href = 'scanner.html';
             } catch (err) {
                 errorDiv.innerText = err.message;
