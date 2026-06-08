@@ -40,7 +40,7 @@
         let html5QrCode;
         let scanning = true;
 
-        // ---------- Helper Functions ----------
+        // Helper to convert any expiry format to Date
         function toDate(expiry) {
             if (!expiry) return null;
             if (typeof expiry.toDate === 'function') return expiry.toDate();
@@ -50,13 +50,13 @@
             return null;
         }
 
-        // Medium penalty table
+        // Penalty calculation (medium table)
         function calculatePenalty(now) {
             const hours = now.getHours();
             const minutes = now.getMinutes();
             const totalMinutes = hours * 60 + minutes;
-            const openMinutes = 10 * 60;          // 10:00
-            const graceEndMinutes = 10 * 60 + 15; // 10:15
+            const openMinutes = 10 * 60;
+            const graceEndMinutes = 10 * 60 + 15;
 
             if (totalMinutes < openMinutes) {
                 return { penalty: 0, status: 'Parlour Closed ❌', allowed: false, message: 'Parlour opens at 10:00 AM' };
@@ -81,27 +81,31 @@
             return { penalty, status: 'Late ⏰', allowed: true, message: `Late by ${lateMinutes} min – penalty ₹${penalty}` };
         }
 
-        async function isOnLeave(staffId, dateStr) {
+        // Leave check using startDateTime / endDateTime
+        async function isOnLeave(staffId, now) {
             const snapshot = await db.collection('leaves')
                 .where('staffId', '==', staffId)
                 .where('status', '==', 'approved')
                 .get();
             for (let doc of snapshot.docs) {
-                const start = doc.data().startDate;
-                const end = doc.data().endDate;
-                if (dateStr >= start && dateStr <= end) return true;
+                const start = doc.data().startDateTime?.toDate();
+                const end = doc.data().endDateTime?.toDate();
+                if (start && end && now >= start && now <= end) {
+                    return true;
+                }
             }
             return false;
         }
 
-        // ---------- Scanner Logic ----------
         async function startScanner() {
             const staffId = localStorage.getItem('staffId');
             const uniqueId = localStorage.getItem('staffUniqueId');
             if (!staffId || !uniqueId) {
+                console.error('Missing login data – redirecting to login');
                 window.location.href = 'index.html';
                 return;
             }
+            console.log('Logged in staff ID:', staffId, 'Unique ID:', uniqueId);
             if (html5QrCode) try { await html5QrCode.stop(); } catch(e) {}
             html5QrCode = new Html5Qrcode("reader");
             try {
@@ -131,44 +135,39 @@
                 const scannedStaffId = qrData.staffId;
                 const scannedUniqueId = qrData.uniqueId;
 
-                // 1. Check unique ID (prevents staff from using another staff's QR)
+                console.log('Scanned QR -> staffId:', scannedStaffId, 'uniqueId:', scannedUniqueId);
+                console.log('Logged in -> staffId:', loggedInStaffId, 'uniqueId:', loggedInUniqueId);
+
+                // Compare both staffId and uniqueId
                 if (scannedStaffId !== loggedInStaffId || scannedUniqueId !== loggedInUniqueId) {
-                    throw new Error('This QR code does not belong to you');
+                    throw new Error(`This QR code does not belong to you (scanned uniqueId=${scannedUniqueId}, your uniqueId=${loggedInUniqueId})`);
                 }
 
-                // 2. Fetch QR session from Firestore
                 const qrDoc = await db.collection('qr_sessions').doc(sessionId).get();
                 if (!qrDoc.exists) throw new Error('Invalid QR code');
                 const session = qrDoc.data();
 
-                // 3. Check expiry
                 const expiry = toDate(session.expiryTime);
                 if (!expiry) throw new Error('Missing expiry time');
                 if (new Date() > expiry) throw new Error('QR code expired (15s)');
                 if (session.isUsed) throw new Error('QR code already used');
 
-                // 4. Mark session as used
                 await db.collection('qr_sessions').doc(sessionId).update({ isUsed: true, usedAt: new Date() });
 
-                // 5. Check if today is a leave day
                 const now = new Date();
-                const todayStr = now.toISOString().split('T')[0];
-                const onLeave = await isOnLeave(loggedInStaffId, todayStr);
-                if (onLeave) throw new Error('You are on approved leave today. No attendance required.');
+                const onLeave = await isOnLeave(loggedInStaffId, now);
+                if (onLeave) throw new Error('You are on approved leave. No attendance required.');
 
-                // 6. Calculate penalty based on current time
                 const { penalty, status, allowed, message } = calculatePenalty(now);
                 if (!allowed) throw new Error(message);
 
-                // 7. Get settings for salary calculation
                 const settingsDoc = await db.collection('settings').doc('appSettings').get();
                 const defaultSalary = settingsDoc.data()?.defaultSalary || 15000;
                 const workingDays = settingsDoc.data()?.workingDays || 26;
                 const perDaySalary = Math.floor(defaultSalary / workingDays);
                 const dailyEarning = perDaySalary - penalty;
 
-                // 8. Mark attendance
-                const date = todayStr;
+                const date = now.toISOString().split('T')[0];
                 const time = now.toLocaleTimeString();
                 const dateDisplay = now.toLocaleDateString();
                 const day = now.toLocaleDateString(undefined, { weekday: 'long' });
@@ -187,7 +186,6 @@
                     timestamp: new Date()
                 });
 
-                // 9. Update staff record (totalDays, totalPenalty)
                 const staffRef = db.collection('staff').doc(session.staffId);
                 const staffDoc = await staffRef.get();
                 const currentTotalDays = staffDoc.data()?.totalDays || 0;
@@ -202,10 +200,10 @@
                 resultDiv.innerHTML = `✅ Attendance marked for ${session.staffName}<br>Time: ${time}<br>Status: ${status}${penalty > 0 ? ` (Penalty: ₹${penalty})` : ''}<br>Today's earning: ₹${dailyEarning}`;
                 resultDiv.className = 'result success';
             } catch(err) {
+                console.error('Scan error:', err);
                 resultDiv.innerHTML = `❌ ${err.message}`;
                 resultDiv.className = 'result error';
             }
-            // Auto restart scanner after 4 seconds
             setTimeout(() => {
                 scanning = true;
                 startScanner();
@@ -218,7 +216,6 @@
         function restartScanner() { scanning = true; startScanner(); }
         function logout() { localStorage.clear(); window.location.href = 'index.html'; }
 
-        // Start the scanner only if logged in
         window.onload = startScanner;
     </script>
 </body>
