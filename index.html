@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Parlour – Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Smart Parlour – Staff Login & Scan</title>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
@@ -15,18 +16,19 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            padding: 16px;
         }
         .card {
             background: white;
             border-radius: 32px;
-            padding: 40px;
+            padding: 24px 20px 32px;
             width: 100%;
-            max-width: 400px;
+            max-width: 500px;
             text-align: center;
             box-shadow: 0 20px 40px rgba(0,0,0,0.2);
         }
-        h1 { font-size: 28px; margin-bottom: 8px; color: #1a1a2e; }
-        .sub { color: #666; margin-bottom: 30px; }
+        h1 { font-size: 26px; margin-bottom: 6px; color: #1a1a2e; }
+        .sub { color: #666; margin-bottom: 24px; font-size: 14px; }
         input {
             width: 100%;
             padding: 14px;
@@ -46,62 +48,307 @@
             font-weight: 600;
             cursor: pointer;
         }
-        .error { color: #d33; margin-top: 15px; font-size: 14px; }
-        .info { margin-top: 20px; font-size: 12px; color: #888; }
+        .error { color: #d33; margin-top: 12px; font-size: 14px; background: #ffe0e0; padding: 8px; border-radius: 12px; }
+        .info { margin-top: 16px; font-size: 12px; color: #888; }
+        .scanner-container {
+            margin-top: 20px;
+            border-radius: 24px;
+            overflow: hidden;
+            background: #000;
+            display: none;
+        }
+        #reader { width: 100%; }
+        .result {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 16px;
+            font-size: 14px;
+            display: none;
+        }
+        .success { background: #10b981; color: white; }
+        .error-msg { background: #ef4444; color: white; }
+        .info-msg { background: #3b82f6; color: white; }
+        .logout-btn {
+            background: #475569;
+            margin-top: 12px;
+        }
+        hr { margin: 20px 0 10px; border-color: #eee; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h1>📱 Smart Parlour</h1>
+<div class="card" id="appCard">
+    <h1>📱 Smart Parlour</h1>
+    <div id="loginView">
         <div class="sub">Login with your registered phone number</div>
         <input type="tel" id="phoneInput" placeholder="e.g., 9876543210" autocomplete="off">
-        <button id="loginBtn">Login & Scan QR</button>
-        <div id="errorMsg" class="error"></div>
+        <button id="loginBtn">Login & Continue to Scan</button>
+        <div id="loginError" class="error" style="display: none;"></div>
         <div class="info">Use the same number that was added as staff in the app.</div>
     </div>
 
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyBDgK7qgbk3p5HN38Tq1siEgfvpPkUCmqA",
-            authDomain: "smart-parlour-4d289.firebaseapp.com",
-            projectId: "smart-parlour-4d289",
-            storageBucket: "smart-parlour-4d289.firebasestorage.app",
-            messagingSenderId: "559319368551",
-            appId: "1:559319368551:android:43c6de3dc5ce33e37ea5c2"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
+    <div id="scannerView" style="display: none;">
+        <div class="sub">📷 Scan QR Code from Staff App</div>
+        <div id="reader"></div>
+        <div id="scanResult" class="result"></div>
+        <button id="restartScannerBtn" class="logout-btn">Restart Scanner</button>
+        <button id="logoutBtn" class="logout-btn">Logout</button>
+    </div>
+</div>
 
-        async function login() {
-            const phone = document.getElementById('phoneInput').value.trim();
-            const btn = document.getElementById('loginBtn');
-            const errorDiv = document.getElementById('errorMsg');
-            if (!phone) { errorDiv.innerText = 'Please enter phone number'; return; }
-            btn.disabled = true; btn.innerText = 'Verifying...';
-            errorDiv.innerText = '';
-            try {
-                const staffQuery = await db.collection('staff').where('phone', '==', phone).limit(1).get();
-                if (staffQuery.empty) throw new Error('Phone number not registered in staff list');
-                const staffDoc = staffQuery.docs[0];
-                const staffData = staffDoc.data();
-                const uniqueId = staffData.uniqueId;
-                if (!uniqueId) throw new Error('Staff record missing uniqueId. Please re-add staff from app.');
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyBDgK7qgbk3p5HN38Tq1siEgfvpPkUCmqA",
+        authDomain: "smart-parlour-4d289.firebaseapp.com",
+        projectId: "smart-parlour-4d289",
+        storageBucket: "smart-parlour-4d289.firebasestorage.app",
+        messagingSenderId: "559319368551",
+        appId: "1:559319368551:android:43c6de3dc5ce33e37ea5c2"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
-                // Store all required data
-                localStorage.setItem('staffId', staffDoc.id);
-                localStorage.setItem('staffName', staffData.name);
-                localStorage.setItem('staffPhone', phone);
-                localStorage.setItem('staffUniqueId', uniqueId);
+    let html5QrCode = null;
+    let currentStaffId = null;
+    let scanningActive = false;
 
-                console.log('Logged in as:', staffData.name, 'Unique ID:', uniqueId);
-                window.location.href = 'scanner.html';
-            } catch (err) {
-                errorDiv.innerText = err.message;
-                btn.disabled = false; btn.innerText = 'Login & Scan QR';
-            }
+    // Helper functions
+    function showLoginError(msg) {
+        const errDiv = document.getElementById('loginError');
+        errDiv.innerText = msg;
+        errDiv.style.display = 'block';
+        setTimeout(() => errDiv.style.display = 'none', 4000);
+    }
+
+    function toDate(expiry) {
+        if (!expiry) return null;
+        if (typeof expiry.toDate === 'function') return expiry.toDate();
+        if (expiry instanceof Date) return expiry;
+        if (typeof expiry === 'string') return new Date(expiry);
+        if (typeof expiry === 'number') return new Date(expiry);
+        return null;
+    }
+
+    function calculatePenalty(now) {
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const totalMinutes = hours * 60 + minutes;
+        const openMinutes = 10 * 60;
+        const graceEndMinutes = 10 * 60 + 15;
+
+        if (totalMinutes < openMinutes) {
+            return { penalty: 0, status: 'Parlour Closed ❌', allowed: false, message: 'Parlour opens at 10:00 AM' };
         }
-        document.getElementById('loginBtn').onclick = login;
-        document.getElementById('phoneInput').addEventListener('keypress', e => { if (e.key === 'Enter') login(); });
-    </script>
+        if (totalMinutes <= graceEndMinutes) {
+            return { penalty: 0, status: 'On Time ✅', allowed: true, message: 'Marked within grace period' };
+        }
+
+        const lateMinutes = totalMinutes - graceEndMinutes;
+        let penalty = 0;
+        if (lateMinutes <= 5) penalty = 10;
+        else if (lateMinutes <= 10) penalty = 15;
+        else if (lateMinutes <= 15) penalty = 20;
+        else if (lateMinutes <= 25) penalty = 30;
+        else if (lateMinutes <= 45) penalty = 40;
+        else if (lateMinutes <= 120) penalty = 60;
+        else if (lateMinutes <= 180) penalty = 80;
+        else if (lateMinutes <= 240) penalty = 100;
+        else if (lateMinutes <= 300) penalty = 120;
+        else if (lateMinutes <= 360) penalty = 150;
+        else penalty = 200;
+        return { penalty, status: 'Late ⏰', allowed: true, message: `Late by ${lateMinutes} min – penalty ₹${penalty}` };
+    }
+
+    async function isOnLeave(staffId, now) {
+        const snapshot = await db.collection('leaves')
+            .where('staffId', '==', staffId)
+            .where('status', '==', 'approved')
+            .get();
+        for (let doc of snapshot.docs) {
+            const start = doc.data().startDateTime?.toDate();
+            const end = doc.data().endDateTime?.toDate();
+            if (start && end && now >= start && now <= end) return true;
+        }
+        return false;
+    }
+
+    async function startScanner() {
+        if (!currentStaffId) {
+            alert('No staff logged in');
+            logout();
+            return;
+        }
+        if (html5QrCode) {
+            try { await html5QrCode.stop(); } catch(e) { console.log(e); }
+        }
+        html5QrCode = new Html5Qrcode("reader");
+        scanningActive = true;
+        try {
+            await html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 300, height: 300 } },
+                (decodedText) => onScanSuccess(decodedText),
+                (err) => console.log("Scan error", err)
+            );
+        } catch(err) {
+            const resultDiv = document.getElementById('scanResult');
+            resultDiv.innerText = 'Camera error: ' + err.message;
+            resultDiv.className = 'result error-msg';
+            resultDiv.style.display = 'block';
+            scanningActive = false;
+        }
+    }
+
+    async function onScanSuccess(decodedText) {
+        if (!scanningActive) return;
+        scanningActive = false;
+        if (html5QrCode) await html5QrCode.stop();
+        const resultDiv = document.getElementById('scanResult');
+        resultDiv.style.display = 'block';
+        resultDiv.className = 'result info-msg';
+        resultDiv.innerText = 'Verifying...';
+
+        try {
+            const qrData = JSON.parse(decodedText);
+            const sessionId = qrData.sessionId;
+            const scannedStaffId = qrData.staffId;
+
+            if (scannedStaffId !== currentStaffId) {
+                throw new Error(`This QR code is not for you (scanned staffId=${scannedStaffId}, your staffId=${currentStaffId})`);
+            }
+
+            const qrDoc = await db.collection('qr_sessions').doc(sessionId).get();
+            if (!qrDoc.exists) throw new Error('Invalid QR code');
+            const session = qrDoc.data();
+
+            const expiry = toDate(session.expiryTime);
+            if (!expiry) throw new Error('Missing expiry time');
+            if (new Date() > expiry) throw new Error('QR code expired (15s)');
+            if (session.isUsed) throw new Error('QR code already used');
+
+            await db.collection('qr_sessions').doc(sessionId).update({ isUsed: true, usedAt: new Date() });
+
+            const now = new Date();
+            const onLeave = await isOnLeave(currentStaffId, now);
+            if (onLeave) throw new Error('You are on approved leave. No attendance required.');
+
+            const { penalty, status, allowed, message } = calculatePenalty(now);
+            if (!allowed) throw new Error(message);
+
+            const settingsDoc = await db.collection('settings').doc('appSettings').get();
+            const defaultSalary = settingsDoc.data()?.defaultSalary || 15000;
+            const workingDays = settingsDoc.data()?.workingDays || 26;
+            const perDaySalary = Math.floor(defaultSalary / workingDays);
+            const dailyEarning = perDaySalary - penalty;
+
+            const date = now.toISOString().split('T')[0];
+            const time = now.toLocaleTimeString();
+            const dateDisplay = now.toLocaleDateString();
+            const day = now.toLocaleDateString(undefined, { weekday: 'long' });
+
+            await db.collection('attendance').add({
+                staffId: session.staffId,
+                staffName: session.staffName,
+                date: date,
+                dateDisplay: dateDisplay,
+                day: day,
+                time: time,
+                status: status,
+                bonus: 0,
+                penalty: penalty,
+                dailyEarning: dailyEarning,
+                timestamp: new Date()
+            });
+
+            const staffRef = db.collection('staff').doc(session.staffId);
+            const staffDoc = await staffRef.get();
+            const currentTotalDays = staffDoc.data()?.totalDays || 0;
+            const currentTotalPenalty = staffDoc.data()?.totalPenalty || 0;
+            await staffRef.update({
+                totalDays: currentTotalDays + 1,
+                totalPenalty: currentTotalPenalty + penalty,
+                lastDate: date,
+                lastTime: time
+            });
+
+            resultDiv.innerHTML = `✅ Attendance marked for ${session.staffName}<br>Time: ${time}<br>Status: ${status}${penalty > 0 ? ` (Penalty: ₹${penalty})` : ''}<br>Today's earning: ₹${dailyEarning}`;
+            resultDiv.className = 'result success';
+        } catch (err) {
+            console.error(err);
+            resultDiv.innerHTML = `❌ ${err.message}`;
+            resultDiv.className = 'result error-msg';
+        }
+        // Auto restart scanner after 4 seconds
+        setTimeout(() => {
+            if (currentStaffId) {
+                scanningActive = true;
+                startScanner();
+                resultDiv.style.display = 'none';
+            }
+        }, 4000);
+    }
+
+    function stopScanner() {
+        if (html5QrCode) {
+            html5QrCode.stop().catch(e => console.log);
+            html5QrCode = null;
+        }
+        scanningActive = false;
+    }
+
+    function logout() {
+        stopScanner();
+        currentStaffId = null;
+        document.getElementById('loginView').style.display = 'block';
+        document.getElementById('scannerView').style.display = 'none';
+        document.getElementById('phoneInput').value = '';
+        const resultDiv = document.getElementById('scanResult');
+        resultDiv.style.display = 'none';
+        resultDiv.innerHTML = '';
+    }
+
+    // Login logic
+    document.getElementById('loginBtn').onclick = async () => {
+        const phone = document.getElementById('phoneInput').value.trim();
+        const btn = document.getElementById('loginBtn');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = 'Verifying...';
+        try {
+            if (!phone) throw new Error('Please enter phone number');
+            const staffQuery = await db.collection('staff').where('phone', '==', phone).limit(1).get();
+            if (staffQuery.empty) throw new Error('Phone number not registered');
+            const staffDoc = staffQuery.docs[0];
+            const staffData = staffDoc.data();
+            currentStaffId = staffDoc.id;
+            localStorage.setItem('staffId', currentStaffId);
+            localStorage.setItem('staffName', staffData.name);
+            // Switch to scanner view
+            document.getElementById('loginView').style.display = 'none';
+            document.getElementById('scannerView').style.display = 'block';
+            // Start scanner
+            startScanner();
+        } catch (err) {
+            showLoginError(err.message);
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    };
+
+    document.getElementById('restartScannerBtn').onclick = () => {
+        if (currentStaffId) {
+            stopScanner();
+            startScanner();
+            const resultDiv = document.getElementById('scanResult');
+            resultDiv.style.display = 'none';
+            resultDiv.className = 'result';
+        }
+    };
+    document.getElementById('logoutBtn').onclick = logout;
+
+    // Auto clear any leftover scanner if page unloads
+    window.addEventListener('beforeunload', () => {
+        if (html5QrCode) html5QrCode.stop().catch(e=>{});
+    });
+</script>
 </body>
 </html>
