@@ -40,7 +40,6 @@
         let html5QrCode;
         let scanning = true;
 
-        // Helper to convert any expiry format to Date
         function toDate(expiry) {
             if (!expiry) return null;
             if (typeof expiry.toDate === 'function') return expiry.toDate();
@@ -50,7 +49,6 @@
             return null;
         }
 
-        // Penalty calculation (medium table)
         function calculatePenalty(now) {
             const hours = now.getHours();
             const minutes = now.getMinutes();
@@ -81,7 +79,6 @@
             return { penalty, status: 'Late ⏰', allowed: true, message: `Late by ${lateMinutes} min – penalty ₹${penalty}` };
         }
 
-        // Leave check using startDateTime / endDateTime
         async function isOnLeave(staffId, now) {
             const snapshot = await db.collection('leaves')
                 .where('staffId', '==', staffId)
@@ -90,29 +87,26 @@
             for (let doc of snapshot.docs) {
                 const start = doc.data().startDateTime?.toDate();
                 const end = doc.data().endDateTime?.toDate();
-                if (start && end && now >= start && now <= end) {
-                    return true;
-                }
+                if (start && end && now >= start && now <= end) return true;
             }
             return false;
         }
 
         async function startScanner() {
             const staffId = localStorage.getItem('staffId');
-            const uniqueId = localStorage.getItem('staffUniqueId');
-            if (!staffId || !uniqueId) {
-                console.error('Missing login data – redirecting to login');
+            if (!staffId) {
+                console.error('No staffId found – redirecting to login');
                 window.location.href = 'index.html';
                 return;
             }
-            console.log('Logged in staff ID:', staffId, 'Unique ID:', uniqueId);
+            console.log('Logged in staff ID:', staffId);
             if (html5QrCode) try { await html5QrCode.stop(); } catch(e) {}
             html5QrCode = new Html5Qrcode("reader");
             try {
                 await html5QrCode.start(
                     { facingMode: "environment" },
                     { fps: 10, qrbox: { width: 300, height: 300 } },
-                    (decodedText) => onScanSuccess(decodedText, staffId, uniqueId),
+                    (decodedText) => onScanSuccess(decodedText, staffId),
                     onScanError
                 );
             } catch(err) {
@@ -121,7 +115,7 @@
             }
         }
 
-        async function onScanSuccess(decodedText, loggedInStaffId, loggedInUniqueId) {
+        async function onScanSuccess(decodedText, loggedInStaffId) {
             if (!scanning) return;
             scanning = false;
             await html5QrCode.stop();
@@ -133,14 +127,11 @@
                 const qrData = JSON.parse(decodedText);
                 const sessionId = qrData.sessionId;
                 const scannedStaffId = qrData.staffId;
-                const scannedUniqueId = qrData.uniqueId;
 
-                console.log('Scanned QR -> staffId:', scannedStaffId, 'uniqueId:', scannedUniqueId);
-                console.log('Logged in -> staffId:', loggedInStaffId, 'uniqueId:', loggedInUniqueId);
+                console.log('Scanned staffId:', scannedStaffId, 'Logged staffId:', loggedInStaffId);
 
-                // Compare both staffId and uniqueId
-                if (scannedStaffId !== loggedInStaffId || scannedUniqueId !== loggedInUniqueId) {
-                    throw new Error(`This QR code does not belong to you (scanned uniqueId=${scannedUniqueId}, your uniqueId=${loggedInUniqueId})`);
+                if (scannedStaffId !== loggedInStaffId) {
+                    throw new Error(`This QR code does not belong to you (scanned staffId=${scannedStaffId}, your staffId=${loggedInStaffId})`);
                 }
 
                 const qrDoc = await db.collection('qr_sessions').doc(sessionId).get();
