@@ -2,10 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Smart Parlour – Download Update</title>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Parlour – Download Latest APK</title>
     <style>
         * {
             margin: 0;
@@ -36,10 +34,6 @@
             font-size: 28px;
             margin-bottom: 12px;
             color: #c084fc;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
         }
         .version {
             background: #334155;
@@ -64,26 +58,16 @@
             font-weight: bold;
             border-radius: 60px;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: transform 0.2s;
             width: 100%;
             margin: 16px 0;
         }
         .download-btn:hover:not(:disabled) {
             transform: scale(1.02);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
         }
         .download-btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
-        }
-        .apk-url {
-            background: #1e293b;
-            padding: 10px;
-            border-radius: 16px;
-            font-size: 11px;
-            word-break: break-all;
-            color: #64748b;
-            margin-top: 20px;
         }
         .loader {
             border: 3px solid #334155;
@@ -116,87 +100,79 @@
 </head>
 <body>
 <div class="card">
-    <h1>
-        📱 Smart Parlour
-    </h1>
-    <div id="versionInfo" class="version">Loading...</div>
+    <h1>📱 Smart Parlour</h1>
+    <div id="versionInfo" class="version">Checking for latest release...</div>
     <div class="info">
-        A new version is ready for download.<br>
-        Tap the button below to get the latest APK.
+        The latest version is ready.<br>
+        Click below to download the APK.
     </div>
-
-    <button id="downloadButton" class="download-btn" disabled>⏳ Checking for update...</button>
-
+    <button id="downloadButton" class="download-btn" disabled>⏳ Loading...</button>
     <div id="statusMessage" class="status"></div>
     <div id="apkUrlDisplay" class="apk-url"></div>
     <hr>
     <div style="font-size: 12px; color: #475569;">
-        Direct download from GitHub Releases<br>
-        Your data is secure.
+        Direct from GitHub Releases<br>
+        Always the latest APK – no manual updates needed.
     </div>
 </div>
 
 <script>
-    const firebaseConfig = {
-        apiKey: "AIzaSyBDgK7qgbk3p5HN38Tq1siEgfvpPkUCmqA",
-        authDomain: "smart-parlour-4d289.firebaseapp.com",
-        projectId: "smart-parlour-4d289",
-        storageBucket: "smart-parlour-4d289.firebasestorage.app",
-        messagingSenderId: "559319368551",
-        appId: "1:559319368551:android:43c6de3dc5ce33e37ea5c2"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
+    // GitHub repo details – CHANGE THESE to your repo
+    const GITHUB_OWNER = "gamerffa3";
+    const GITHUB_REPO = "Smart-Parlour";
 
-    async function loadUpdate() {
+    async function getLatestApk() {
         const versionSpan = document.getElementById('versionInfo');
         const downloadBtn = document.getElementById('downloadButton');
         const statusDiv = document.getElementById('statusMessage');
         const urlDiv = document.getElementById('apkUrlDisplay');
 
-        versionSpan.innerText = 'Fetching latest version...';
+        versionSpan.innerText = 'Fetching latest release...';
         downloadBtn.disabled = true;
-        downloadBtn.innerText = '⏳ Loading...';
+        downloadBtn.innerText = '⏳ Connecting to GitHub...';
 
         try {
-            const docRef = db.collection('app_config').doc('update');
-            const doc = await docRef.get();
-
-            if (!doc.exists) {
-                throw new Error('No update configuration found. Please contact admin.');
+            // 1. Get the latest release from GitHub API
+            const releaseUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+            const response = await fetch(releaseUrl);
+            if (!response.ok) {
+                if (response.status === 404) throw new Error('No releases found. Create a release first.');
+                throw new Error(`GitHub API error: ${response.status}`);
             }
+            const release = await response.json();
+            const tagName = release.tag_name; // e.g., "v1.0.3"
+            const version = tagName.startsWith('v') ? tagName.slice(1) : tagName;
 
-            const data = doc.data();
-            const latestVersion = data.latestVersion || 'unknown';
-            const apkUrl = data.apkDownloadUrl;
-
-            if (!apkUrl || apkUrl.trim() === '') {
-                throw new Error('APK download URL is missing. Admin needs to publish an update.');
+            // 2. Find the first APK asset
+            const assets = release.assets;
+            const apkAsset = assets.find(asset => asset.name.endsWith('.apk'));
+            if (!apkAsset) {
+                throw new Error('No APK file found in the latest release. Please upload an APK.');
             }
+            const downloadUrl = apkAsset.browser_download_url;
 
-            versionSpan.innerText = `📦 Version ${latestVersion}`;
-            urlDiv.innerText = `Download URL: ${apkUrl}`;
-
+            // 3. Display and enable download
+            versionSpan.innerText = `📦 Version ${version}`;
+            urlDiv.innerText = `Download URL: ${downloadUrl}`;
             downloadBtn.disabled = false;
-            downloadBtn.innerText = `⬇️ Download APK v${latestVersion}`;
+            downloadBtn.innerText = `⬇️ Download APK v${version}`;
             downloadBtn.onclick = () => {
-                // Start download directly
-                window.location.href = apkUrl;
+                window.location.href = downloadUrl;
                 statusDiv.innerHTML = '✅ Download started! Check your notifications.';
                 statusDiv.className = 'status success';
             };
         } catch (err) {
             console.error(err);
-            versionSpan.innerText = '⚠️ Update error';
+            versionSpan.innerText = '⚠️ Update unavailable';
             downloadBtn.disabled = true;
-            downloadBtn.innerText = 'Update Unavailable';
+            downloadBtn.innerText = 'No APK found';
             statusDiv.innerHTML = `❌ ${err.message}`;
             statusDiv.className = 'status error';
             urlDiv.innerText = '';
         }
     }
 
-    loadUpdate();
+    getLatestApk();
 </script>
 </body>
 </html>
