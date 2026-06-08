@@ -1,1 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Parlour – Developer: Set Active Version</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            background: #0f172a;
+            color: white;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .card {
+            background: #1e293b;
+            border-radius: 24px;
+            padding: 32px;
+            max-width: 700px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        h2, h3 { margin-top: 0; color: #c084fc; }
+        select, input, button {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0 16px;
+            border-radius: 12px;
+            border: none;
+            font-size: 16px;
+        }
+        select, input {
+            background: #334155;
+            color: white;
+            border: 1px solid #475569;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover { background: #2563eb; }
+        .error { color: #f87171; margin-top: 10px; }
+        .success { color: #4ade80; margin-top: 10px; }
+        .info { color: #94a3b8; font-size: 14px; margin-top: 8px; }
+        hr { margin: 20px 0; border-color: #334155; }
+        .release-item {
+            background: #0f172a;
+            padding: 12px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            border: 1px solid #334155;
+        }
+        .release-item.selected {
+            border-color: #3b82f6;
+            background: #1e3a5f;
+        }
+        .release-name { font-weight: bold; }
+        .release-url { font-size: 12px; color: #94a3b8; word-break: break-all; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h2>🔧 Developer – Set Active Update</h2>
+    <p>You have already uploaded APK to GitHub Releases. Now select which version should be offered to users.</p>
 
+    <input type="password" id="adminPass" placeholder="Admin password">
+    <button id="loginBtn">Login</button>
+    <div id="loginError" class="error"></div>
+
+    <div id="panel" style="display: none;">
+        <hr>
+        <h3>📦 GitHub Releases</h3>
+        <button id="fetchReleasesBtn">Load Releases</button>
+        <div id="releasesList" style="margin: 16px 0;"></div>
+
+        <div id="selectionArea" style="display: none;">
+            <h3>⚙️ Set as Active Update</h3>
+            <input type="text" id="versionInput" placeholder="Version number (e.g., 1.0.3)">
+            <button id="updateFirestoreBtn">Update Firestore → Users will see this update</button>
+            <div id="updateMsg"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyBDgK7qgbk3p5HN38Tq1siEgfvpPkUCmqA",
+        authDomain: "smart-parlour-4d289.firebaseapp.com",
+        projectId: "smart-parlour-4d289",
+        storageBucket: "smart-parlour-4d289.firebasestorage.app",
+        messagingSenderId: "559319368551",
+        appId: "1:559319368551:android:43c6de3dc5ce33e37ea5c2"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const ADMIN_PASSWORD = "7788";  // change if needed
+    const GITHUB_OWNER = "gamerffa3";
+    const GITHUB_REPO = "Smart-Parlour";
+
+    let selectedAssetUrl = "";
+    let selectedVersion = "";
+
+    // Login
+    document.getElementById('loginBtn').onclick = () => {
+        const pwd = document.getElementById('adminPass').value;
+        if (pwd === ADMIN_PASSWORD) {
+            document.getElementById('panel').style.display = 'block';
+            document.getElementById('loginError').innerText = '';
+        } else {
+            document.getElementById('loginError').innerText = 'Wrong password';
+        }
+    };
+
+    // Fetch releases from GitHub (public)
+    document.getElementById('fetchReleasesBtn').onclick = async () => {
+        const releasesDiv = document.getElementById('releasesList');
+        releasesDiv.innerHTML = 'Loading releases...';
+        try {
+            const response = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases`);
+            if (!response.ok) throw new Error('Failed to fetch releases');
+            const releases = await response.json();
+            if (releases.length === 0) {
+                releasesDiv.innerHTML = '<div class="error">No releases found. Create a release manually on GitHub.</div>';
+                return;
+            }
+            // Display each release with APK asset
+            releasesDiv.innerHTML = '';
+            for (const release of releases) {
+                const apkAsset = release.assets.find(asset => asset.name.endsWith('.apk'));
+                if (!apkAsset) continue; // skip releases without APK
+                const assetUrl = apkAsset.browser_download_url;
+                const tagName = release.tag_name;  // e.g., "v1.0.3"
+                const versionNumber = tagName.startsWith('v') ? tagName.slice(1) : tagName;
+
+                const div = document.createElement('div');
+                div.className = 'release-item';
+                div.innerHTML = `
+                    <div class="release-name">📱 ${release.name || tagName}</div>
+                    <div class="release-url">${assetUrl}</div>
+                `;
+                div.onclick = () => {
+                    // Remove selected class from all
+                    document.querySelectorAll('.release-item').forEach(el => el.classList.remove('selected'));
+                    div.classList.add('selected');
+                    selectedAssetUrl = assetUrl;
+                    selectedVersion = versionNumber;
+                    document.getElementById('versionInput').value = versionNumber;
+                    document.getElementById('selectionArea').style.display = 'block';
+                };
+                releasesDiv.appendChild(div);
+            }
+            if (releasesDiv.children.length === 0) {
+                releasesDiv.innerHTML = '<div class="error">No APK assets found in releases.</div>';
+            }
+        } catch (err) {
+            releasesDiv.innerHTML = `<div class="error">${err.message}</div>`;
+        }
+    };
+
+    // Update Firestore
+    document.getElementById('updateFirestoreBtn').onclick = async () => {
+        const version = document.getElementById('versionInput').value.trim();
+        const msgDiv = document.getElementById('updateMsg');
+        if (!version) {
+            msgDiv.innerHTML = '❌ Please enter a version number';
+            msgDiv.className = 'error';
+            return;
+        }
+        if (!selectedAssetUrl) {
+            msgDiv.innerHTML = '❌ Select a release from the list first';
+            msgDiv.className = 'error';
+            return;
+        }
+        msgDiv.innerHTML = '⏳ Updating Firestore...';
+        msgDiv.className = 'info';
+        try {
+            await db.collection('app_config').doc('update').set({
+                latestVersion: version,
+                apkDownloadUrl: selectedAssetUrl,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+            msgDiv.innerHTML = `✅ Done! Version ${version} is now live. Users will see "Update App".`;
+            msgDiv.className = 'success';
+        } catch (err) {
+            msgDiv.innerHTML = `❌ Error: ${err.message}`;
+            msgDiv.className = 'error';
+        }
+    };
+</script>
+</body>
+</html>
