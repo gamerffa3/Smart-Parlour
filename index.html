@@ -84,10 +84,16 @@
                 if (staffQuery.empty) throw new Error('Phone number not registered in staff list');
                 const staffDoc = staffQuery.docs[0];
                 const staffData = staffDoc.data();
+                const uniqueId = staffData.uniqueId;
+                if (!uniqueId) throw new Error('Staff record missing uniqueId. Please re-add staff from app.');
+
+                // Store all required data
                 localStorage.setItem('staffId', staffDoc.id);
                 localStorage.setItem('staffName', staffData.name);
                 localStorage.setItem('staffPhone', phone);
-                localStorage.setItem('staffUniqueId', staffData.uniqueId);   // ✅ store uniqueId
+                localStorage.setItem('staffUniqueId', uniqueId);
+
+                console.log('Logged in as:', staffData.name, 'Unique ID:', uniqueId);
                 window.location.href = 'scanner.html';
             } catch (err) {
                 errorDiv.innerText = err.message;
