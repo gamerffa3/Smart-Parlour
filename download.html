@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Smart Parlour – Download Update</title>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -68,9 +68,13 @@
             width: 100%;
             margin: 16px 0;
         }
-        .download-btn:hover {
+        .download-btn:hover:not(:disabled) {
             transform: scale(1.02);
             box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+        .download-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
         .apk-url {
             background: #1e293b;
@@ -176,7 +180,7 @@
             downloadBtn.disabled = false;
             downloadBtn.innerText = `⬇️ Download APK v${latestVersion}`;
             downloadBtn.onclick = () => {
-                // Start download
+                // Start download directly
                 window.location.href = apkUrl;
                 statusDiv.innerHTML = '✅ Download started! Check your notifications.';
                 statusDiv.className = 'status success';
