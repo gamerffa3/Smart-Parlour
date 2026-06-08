@@ -40,28 +40,75 @@
         let html5QrCode;
         let scanning = true;
 
-        // Helper to convert any expiry format to Date object
+        // ---------- Helper Functions ----------
         function toDate(expiry) {
             if (!expiry) return null;
-            // Firestore Timestamp
             if (typeof expiry.toDate === 'function') return expiry.toDate();
-            // JavaScript Date object
             if (expiry instanceof Date) return expiry;
-            // ISO string
             if (typeof expiry === 'string') return new Date(expiry);
-            // milliseconds number
             if (typeof expiry === 'number') return new Date(expiry);
             return null;
         }
 
+        // Medium penalty table
+        function calculatePenalty(now) {
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const totalMinutes = hours * 60 + minutes;
+            const openMinutes = 10 * 60;          // 10:00
+            const graceEndMinutes = 10 * 60 + 15; // 10:15
+
+            if (totalMinutes < openMinutes) {
+                return { penalty: 0, status: 'Parlour Closed ❌', allowed: false, message: 'Parlour opens at 10:00 AM' };
+            }
+            if (totalMinutes <= graceEndMinutes) {
+                return { penalty: 0, status: 'On Time ✅', allowed: true, message: 'Marked within grace period' };
+            }
+
+            const lateMinutes = totalMinutes - graceEndMinutes;
+            let penalty = 0;
+            if (lateMinutes <= 5) penalty = 10;
+            else if (lateMinutes <= 10) penalty = 15;
+            else if (lateMinutes <= 15) penalty = 20;
+            else if (lateMinutes <= 25) penalty = 30;
+            else if (lateMinutes <= 45) penalty = 40;
+            else if (lateMinutes <= 120) penalty = 60;
+            else if (lateMinutes <= 180) penalty = 80;
+            else if (lateMinutes <= 240) penalty = 100;
+            else if (lateMinutes <= 300) penalty = 120;
+            else if (lateMinutes <= 360) penalty = 150;
+            else penalty = 200;
+            return { penalty, status: 'Late ⏰', allowed: true, message: `Late by ${lateMinutes} min – penalty ₹${penalty}` };
+        }
+
+        async function isOnLeave(staffId, dateStr) {
+            const snapshot = await db.collection('leaves')
+                .where('staffId', '==', staffId)
+                .where('status', '==', 'approved')
+                .get();
+            for (let doc of snapshot.docs) {
+                const start = doc.data().startDate;
+                const end = doc.data().endDate;
+                if (dateStr >= start && dateStr <= end) return true;
+            }
+            return false;
+        }
+
+        // ---------- Scanner Logic ----------
         async function startScanner() {
+            const staffId = localStorage.getItem('staffId');
+            const uniqueId = localStorage.getItem('staffUniqueId');
+            if (!staffId || !uniqueId) {
+                window.location.href = 'index.html';
+                return;
+            }
             if (html5QrCode) try { await html5QrCode.stop(); } catch(e) {}
             html5QrCode = new Html5Qrcode("reader");
             try {
                 await html5QrCode.start(
                     { facingMode: "environment" },
                     { fps: 10, qrbox: { width: 300, height: 300 } },
-                    onScanSuccess,
+                    (decodedText) => onScanSuccess(decodedText, staffId, uniqueId),
                     onScanError
                 );
             } catch(err) {
@@ -70,7 +117,7 @@
             }
         }
 
-        async function onScanSuccess(decodedText) {
+        async function onScanSuccess(decodedText, loggedInStaffId, loggedInUniqueId) {
             if (!scanning) return;
             scanning = false;
             await html5QrCode.stop();
@@ -81,54 +128,78 @@
             try {
                 const qrData = JSON.parse(decodedText);
                 const sessionId = qrData.sessionId;
+                const scannedStaffId = qrData.staffId;
+                const scannedUniqueId = qrData.uniqueId;
+
+                // 1. Check unique ID (prevents staff from using another staff's QR)
+                if (scannedStaffId !== loggedInStaffId || scannedUniqueId !== loggedInUniqueId) {
+                    throw new Error('This QR code does not belong to you');
+                }
+
+                // 2. Fetch QR session from Firestore
                 const qrDoc = await db.collection('qr_sessions').doc(sessionId).get();
                 if (!qrDoc.exists) throw new Error('Invalid QR code');
                 const session = qrDoc.data();
 
-                // Fix: convert expiryTime safely
+                // 3. Check expiry
                 const expiry = toDate(session.expiryTime);
                 if (!expiry) throw new Error('Missing expiry time');
                 if (new Date() > expiry) throw new Error('QR code expired (15s)');
                 if (session.isUsed) throw new Error('QR code already used');
 
-                // Mark session as used
+                // 4. Mark session as used
                 await db.collection('qr_sessions').doc(sessionId).update({ isUsed: true, usedAt: new Date() });
 
-                // Mark attendance
-                const staffId = session.staffId;
+                // 5. Check if today is a leave day
                 const now = new Date();
-                const date = now.toISOString().split('T')[0];
-                const time = now.toLocaleTimeString();
-                const dateDisplay = now.toLocaleDateString();
-                const day = now.toLocaleDateString(undefined, { weekday: 'long' });
+                const todayStr = now.toISOString().split('T')[0];
+                const onLeave = await isOnLeave(loggedInStaffId, todayStr);
+                if (onLeave) throw new Error('You are on approved leave today. No attendance required.');
 
-                // Get settings for salary calculation
+                // 6. Calculate penalty based on current time
+                const { penalty, status, allowed, message } = calculatePenalty(now);
+                if (!allowed) throw new Error(message);
+
+                // 7. Get settings for salary calculation
                 const settingsDoc = await db.collection('settings').doc('appSettings').get();
                 const defaultSalary = settingsDoc.data()?.defaultSalary || 15000;
                 const workingDays = settingsDoc.data()?.workingDays || 26;
                 const perDaySalary = Math.floor(defaultSalary / workingDays);
+                const dailyEarning = perDaySalary - penalty;
+
+                // 8. Mark attendance
+                const date = todayStr;
+                const time = now.toLocaleTimeString();
+                const dateDisplay = now.toLocaleDateString();
+                const day = now.toLocaleDateString(undefined, { weekday: 'long' });
 
                 await db.collection('attendance').add({
-                    staffId: staffId,
+                    staffId: session.staffId,
                     staffName: session.staffName,
                     date: date,
                     dateDisplay: dateDisplay,
                     day: day,
                     time: time,
-                    status: 'Present ✅',
-                    timestamp: new Date(),
+                    status: status,
                     bonus: 0,
-                    penalty: 0,
-                    dailyEarning: perDaySalary
+                    penalty: penalty,
+                    dailyEarning: dailyEarning,
+                    timestamp: new Date()
                 });
 
-                // Update staff record
-                const staffRef = db.collection('staff').doc(staffId);
+                // 9. Update staff record (totalDays, totalPenalty)
+                const staffRef = db.collection('staff').doc(session.staffId);
                 const staffDoc = await staffRef.get();
-                const totalDays = (staffDoc.data()?.totalDays || 0) + 1;
-                await staffRef.update({ totalDays: totalDays, lastDate: date, lastTime: time });
+                const currentTotalDays = staffDoc.data()?.totalDays || 0;
+                const currentTotalPenalty = staffDoc.data()?.totalPenalty || 0;
+                await staffRef.update({
+                    totalDays: currentTotalDays + 1,
+                    totalPenalty: currentTotalPenalty + penalty,
+                    lastDate: date,
+                    lastTime: time
+                });
 
-                resultDiv.innerHTML = `✅ Attendance marked for ${session.staffName} at ${time}`;
+                resultDiv.innerHTML = `✅ Attendance marked for ${session.staffName}<br>Time: ${time}<br>Status: ${status}${penalty > 0 ? ` (Penalty: ₹${penalty})` : ''}<br>Today's earning: ₹${dailyEarning}`;
                 resultDiv.className = 'result success';
             } catch(err) {
                 resultDiv.innerHTML = `❌ ${err.message}`;
@@ -147,13 +218,8 @@
         function restartScanner() { scanning = true; startScanner(); }
         function logout() { localStorage.clear(); window.location.href = 'index.html'; }
 
-        window.onload = () => {
-            if (!localStorage.getItem('staffId')) {
-                window.location.href = 'index.html';
-                return;
-            }
-            startScanner();
-        };
+        // Start the scanner only if logged in
+        window.onload = startScanner;
     </script>
 </body>
 </html>
