@@ -56,8 +56,7 @@
         button:disabled { opacity: 0.6; cursor: not-allowed; }
         .error { color: #f87171; margin-top: 12px; font-size: 14px; background: #1e293b; padding: 10px; border-radius: 16px; }
         .info { margin-top: 20px; font-size: 12px; color: #64748b; }
-        .scanner-container { margin-top: 20px; border-radius: 24px; overflow: hidden; background: #000; display: none; }
-        #reader { width: 100%; }
+        #reader { width: 100%; margin-top: 20px; border-radius: 20px; overflow: hidden; }
         .result {
             margin-top: 16px;
             padding: 12px;
@@ -93,7 +92,6 @@
 </div>
 
 <script>
-    // Firebase configuration
     const firebaseConfig = {
         apiKey: "AIzaSyBDgK7qgbk3p5HN38Tq1siEgfvpPkUCmqA",
         authDomain: "smart-parlour-4d289.firebaseapp.com",
@@ -107,10 +105,8 @@
 
     let html5QrCode = null;
     let currentStaffId = null;
-    let currentStaffName = null;
     let scanningActive = false;
 
-    // -------------------- Helper functions --------------------
     function showLoginError(msg) {
         const errDiv = document.getElementById('loginError');
         errDiv.innerText = msg;
@@ -127,24 +123,20 @@
         return null;
     }
 
-    // Bonus & Penalty calculation (as per your rules)
     function calculateBonusPenalty(now) {
         const hours = now.getHours();
         const minutes = now.getMinutes();
         const totalMinutes = hours * 60 + minutes;
 
-        // 9:30 AM = 570 minutes, 10:20 AM = 620 minutes, 9:00 PM = 1260
-        if (totalMinutes >= 21*60) { // after 9:00 PM
+        if (totalMinutes >= 21*60) {
             return { bonus: 0, penalty: 0, status: 'Parlour Closed ❌', allowed: false, message: 'No attendance after 9:00 PM' };
         }
-        if (totalMinutes < 9*60+30) { // before 9:30 AM
+        if (totalMinutes < 9*60+30) {
             return { bonus: 0, penalty: 0, status: 'Parlour Closed ❌', allowed: false, message: 'Parlour opens at 9:30 AM' };
         }
-        // Early arrival bonus (9:30 – 10:20)
         if (totalMinutes >= 9*60+30 && totalMinutes <= 10*60+20) {
-            return { bonus: 5, penalty: 0, status: 'Early ✅', allowed: true, message: 'Bonus ₹5 for early arrival' };
+            return { bonus: 5, penalty: 0, status: 'Early ✅', allowed: true, message: 'Attendance marked' };
         }
-        // Penalty after 10:20
         const lateMinutes = totalMinutes - (10*60+20);
         let penalty = 0;
         if (lateMinutes <= 10) penalty = 10;
@@ -158,10 +150,9 @@
         else if (lateMinutes <= 360) penalty = 120;
         else if (lateMinutes <= 420) penalty = 150;
         else penalty = 200;
-        return { bonus: 0, penalty: penalty, status: 'Late ⏰', allowed: true, message: `Late by ${lateMinutes} min – penalty ₹${penalty}` };
+        return { bonus: 0, penalty: penalty, status: 'Late ⏰', allowed: true, message: 'Attendance marked' };
     }
 
-    // Check if staff is on approved leave at this moment
     async function isOnLeave(staffId, now) {
         const snapshot = await db.collection('leaves')
             .where('staffId', '==', staffId)
@@ -175,7 +166,6 @@
         return false;
     }
 
-    // -------------------- QR Scanner Success --------------------
     async function onScanSuccess(decodedText) {
         if (!scanningActive) return;
         scanningActive = false;
@@ -191,7 +181,7 @@
             const scannedStaffId = qrData.staffId;
 
             if (scannedStaffId !== currentStaffId) {
-                throw new Error(`This QR code is not for you (scanned staffId=${scannedStaffId}, your staffId=${currentStaffId})`);
+                throw new Error('This QR code is not for you');
             }
 
             const qrDoc = await db.collection('qr_sessions').doc(sessionId).get();
@@ -216,7 +206,7 @@
             const defaultSalary = settingsDoc.data()?.defaultSalary || 15000;
             const workingDays = settingsDoc.data()?.workingDays || 26;
             const perDaySalary = Math.floor(defaultSalary / workingDays);
-            const dailyEarning = perDaySalary + bonus - penalty;   // bonus positive, penalty negative
+            const dailyEarning = perDaySalary + bonus - penalty;
 
             const date = now.toISOString().split('T')[0];
             const time = now.toLocaleTimeString();
@@ -254,21 +244,20 @@
                 lastDate: date,
             });
 
-            resultDiv.innerHTML = `✅ Attendance marked for ${session.staffName}<br>Time: ${time}<br>Status: ${status}<br>Bonus: +₹${bonus} | Penalty: -₹${penalty}<br>Today's earnings: ₹${dailyEarning}`;
+            resultDiv.innerHTML = '✅ Attendance marked successfully!';
             resultDiv.className = 'result success';
         } catch (err) {
             console.error(err);
             resultDiv.innerHTML = `❌ ${err.message}`;
             resultDiv.className = 'result error-msg';
         }
-        // Restart scanner after 4 seconds
         setTimeout(() => {
             if (currentStaffId) {
                 scanningActive = true;
                 startScanner();
                 resultDiv.style.display = 'none';
             }
-        }, 4000);
+        }, 3000);
     }
 
     function onScanError(err) { console.log(err); }
@@ -307,7 +296,6 @@
     function logout() {
         stopScanner();
         currentStaffId = null;
-        currentStaffName = null;
         document.getElementById('loginView').style.display = 'block';
         document.getElementById('scannerView').style.display = 'none';
         document.getElementById('phoneInput').value = '';
@@ -316,7 +304,6 @@
         resultDiv.innerHTML = '';
     }
 
-    // -------------------- Login --------------------
     document.getElementById('loginBtn').onclick = async () => {
         const phone = document.getElementById('phoneInput').value.trim();
         const btn = document.getElementById('loginBtn');
@@ -328,13 +315,9 @@
             const staffQuery = await db.collection('staff').where('phone', '==', phone).limit(1).get();
             if (staffQuery.empty) throw new Error('Phone number not registered');
             const staffDoc = staffQuery.docs[0];
-            const staffData = staffDoc.data();
             currentStaffId = staffDoc.id;
-            currentStaffName = staffData.name;
-            // Switch to scanner view
             document.getElementById('loginView').style.display = 'none';
             document.getElementById('scannerView').style.display = 'block';
-            // Start scanner
             startScanner();
         } catch (err) {
             showLoginError(err.message);
@@ -353,13 +336,6 @@
         }
     };
     document.getElementById('logoutBtn').onclick = logout;
-
-    window.onload = () => {
-        // No auto-start; login required first
-    };
-    window.addEventListener('beforeunload', () => {
-        if (html5QrCode) html5QrCode.stop().catch(e=>{});
-    });
 </script>
 </body>
 </html>
