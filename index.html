@@ -166,6 +166,15 @@
         return false;
     }
 
+    // ✅ Monthly holiday check function
+    async function isMonthlyHoliday(staffId, now) {
+        const staffDoc = await db.collection('staff').doc(staffId).get();
+        if (!staffDoc.exists) return false;
+        const monthlyHolidays = staffDoc.data()?.monthlyHolidays || [];
+        const todayDate = now.getDate();
+        return monthlyHolidays.includes(todayDate);
+    }
+
     async function onScanSuccess(decodedText) {
         if (!scanningActive) return;
         scanningActive = false;
@@ -196,6 +205,14 @@
             await db.collection('qr_sessions').doc(sessionId).update({ isUsed: true, usedAt: new Date() });
 
             const now = new Date();
+            
+            // ✅ Check monthly holiday first
+            const isHoliday = await isMonthlyHoliday(currentStaffId, now);
+            if (isHoliday) {
+                throw new Error('Today is a monthly holiday. No attendance required.');
+            }
+            
+            // ✅ Check approved leave
             const onLeave = await isOnLeave(currentStaffId, now);
             if (onLeave) throw new Error('You are on approved leave. No attendance required.');
 
