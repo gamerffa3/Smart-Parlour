@@ -2,92 +2,246 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Smart Parlour – Staff QR Scanner</title>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 20px;
+            padding: 16px;
         }
+
+        /* Card Container */
         .card {
-            background: rgba(30, 41, 59, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 32px;
-            padding: 24px 20px 32px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(20px);
+            border-radius: 40px;
+            padding: 28px 24px 36px;
             width: 100%;
             max-width: 550px;
-            text-align: center;
-            box-shadow: 0 25px 40px rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: all 0.3s ease;
         }
-        h1 { font-size: 28px; margin-bottom: 6px; color: #c084fc; }
-        .sub { color: #94a3b8; margin-bottom: 24px; font-size: 14px; }
+
+        /* Header */
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #c084fc, #a855f7);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .sub {
+            color: #94a3b8;
+            margin-bottom: 28px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Input Field */
         input {
             width: 100%;
-            padding: 14px;
+            padding: 16px 18px;
             background: #1e293b;
-            border: 1px solid #475569;
-            border-radius: 20px;
+            border: 1.5px solid #334155;
+            border-radius: 28px;
             font-size: 16px;
-            color: white;
-            margin-bottom: 20px;
+            color: #f1f5f9;
+            transition: all 0.2s ease;
+            outline: none;
         }
+
+        input:focus {
+            border-color: #a855f7;
+            box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2);
+        }
+
+        /* Button */
         button {
             width: 100%;
-            padding: 14px;
+            padding: 16px;
             background: linear-gradient(135deg, #10b981, #059669);
             color: white;
             border: none;
             border-radius: 40px;
             font-size: 16px;
-            font-weight: bold;
+            font-weight: 700;
             cursor: pointer;
-            transition: 0.2s;
+            transition: all 0.2s ease;
+            margin-top: 8px;
+            box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.3);
         }
-        button:disabled { opacity: 0.6; cursor: not-allowed; }
-        .error { color: #f87171; margin-top: 12px; font-size: 14px; background: #1e293b; padding: 10px; border-radius: 16px; }
-        .info { margin-top: 20px; font-size: 12px; color: #64748b; }
-        #reader { width: 100%; margin-top: 20px; border-radius: 20px; overflow: hidden; }
-        .result {
-            margin-top: 16px;
-            padding: 12px;
-            border-radius: 20px;
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px 0 rgba(16, 185, 129, 0.4);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Logout button */
+        .logout-btn {
+            background: linear-gradient(135deg, #475569, #334155);
+            box-shadow: none;
+            margin-top: 12px;
+        }
+
+        .logout-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #64748b, #475569);
+            transform: translateY(-2px);
+        }
+
+        /* Error & Info */
+        .error {
+            color: #f87171;
+            margin-top: 14px;
             font-size: 14px;
-            display: none;
+            background: rgba(239, 68, 68, 0.1);
+            padding: 12px;
+            border-radius: 24px;
+            border-left: 3px solid #ef4444;
+            text-align: left;
         }
-        .success { background: #10b981; color: white; }
-        .error-msg { background: #ef4444; color: white; }
-        .info-msg { background: #3b82f6; color: white; }
-        .logout-btn { background: #475569; margin-top: 12px; }
-        hr { margin: 20px 0; border-color: #334155; }
+
+        .info {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #64748b;
+            text-align: center;
+        }
+
+        /* QR Scanner Container */
+        #reader {
+            width: 100%;
+            margin-top: 20px;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Result Messages */
+        .result {
+            margin-top: 20px;
+            padding: 14px 18px;
+            border-radius: 28px;
+            font-size: 14px;
+            font-weight: 500;
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .success {
+            background: #10b981;
+            color: white;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .error-msg {
+            background: #ef4444;
+            color: white;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        }
+
+        .info-msg {
+            background: #3b82f6;
+            color: white;
+        }
+
+        /* Staff Name Display */
+        .staff-info {
+            background: rgba(168, 85, 247, 0.15);
+            border-radius: 32px;
+            padding: 12px 18px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            color: #c084fc;
+            font-weight: 500;
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .card {
+                padding: 20px 18px 28px;
+            }
+            h1 {
+                font-size: 28px;
+            }
+            button {
+                padding: 14px;
+            }
+            input {
+                padding: 14px 16px;
+            }
+        }
+
+        /* Loading spinner */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
 <div class="card" id="appCard">
-    <h1>📱 Smart Parlour</h1>
+    <h1>✨ Smart Parlour</h1>
     <div id="loginView">
-        <div class="sub">Enter your registered phone number</div>
-        <input type="tel" id="phoneInput" placeholder="e.g., 9876543210" autocomplete="off">
-        <button id="loginBtn">Login & Start Scanner</button>
+        <div class="sub">Staff Login</div>
+        <input type="tel" id="phoneInput" placeholder="📞 10-digit phone number" autocomplete="off" inputmode="numeric">
+        <button id="loginBtn">🔐 Login & Start Scanner</button>
         <div id="loginError" class="error" style="display: none;"></div>
-        <div class="info">Use the same number that was added as staff in the app.</div>
+        <div class="info">Use the same number registered in the app</div>
     </div>
 
     <div id="scannerView" style="display: none;">
-        <div class="sub">📷 Scan QR Code from Staff App</div>
+        <div class="staff-info" id="staffNameDisplay"></div>
+        <div class="sub">📷 Scan QR Code</div>
         <div id="reader"></div>
         <div id="scanResult" class="result"></div>
-        <button id="restartScannerBtn" class="logout-btn">Restart Scanner</button>
-        <button id="logoutBtn" class="logout-btn">Logout</button>
+        <button id="restartScannerBtn" class="logout-btn">🔄 Restart Scanner</button>
+        <button id="logoutBtn" class="logout-btn">🚪 Logout</button>
     </div>
 </div>
 
@@ -105,6 +259,7 @@
 
     let html5QrCode = null;
     let currentStaffId = null;
+    let currentStaffName = null;
     let scanningActive = false;
 
     function showLoginError(msg) {
@@ -129,13 +284,13 @@
         const totalMinutes = hours * 60 + minutes;
 
         if (totalMinutes >= 21*60) {
-            return { bonus: 0, penalty: 0, status: 'Parlour Closed ❌', allowed: false, message: 'No attendance after 9:00 PM' };
+            return { bonus: 0, penalty: 0, status: 'Parlour Closed ❌', allowed: false, message: 'Parlour closed after 9:00 PM' };
         }
         if (totalMinutes < 9*60+30) {
-            return { bonus: 0, penalty: 0, status: 'Parlour Closed ❌', allowed: false, message: 'Parlour opens at 9:30 AM' };
+            return { bonus: 0, penalty: 0, status: 'Parlour Closed ❌', allowed: false, message: 'Opens at 9:30 AM' };
         }
         if (totalMinutes >= 9*60+30 && totalMinutes <= 10*60+20) {
-            return { bonus: 5, penalty: 0, status: 'Early ✅', allowed: true, message: 'Attendance marked' };
+            return { bonus: 5, penalty: 0, status: 'Early ✅', allowed: true, message: 'Bonus +₹5' };
         }
         const lateMinutes = totalMinutes - (10*60+20);
         let penalty = 0;
@@ -150,7 +305,7 @@
         else if (lateMinutes <= 360) penalty = 120;
         else if (lateMinutes <= 420) penalty = 150;
         else penalty = 200;
-        return { bonus: 0, penalty: penalty, status: 'Late ⏰', allowed: true, message: 'Attendance marked' };
+        return { bonus: 0, penalty: penalty, status: 'Late ⏰', allowed: true, message: `Penalty -₹${penalty}` };
     }
 
     async function isOnLeave(staffId, now) {
@@ -166,7 +321,6 @@
         return false;
     }
 
-    // ✅ Monthly holiday check function
     async function isMonthlyHoliday(staffId, now) {
         const staffDoc = await db.collection('staff').doc(staffId).get();
         if (!staffDoc.exists) return false;
@@ -182,7 +336,7 @@
         const resultDiv = document.getElementById('scanResult');
         resultDiv.style.display = 'block';
         resultDiv.className = 'result info-msg';
-        resultDiv.innerText = 'Verifying...';
+        resultDiv.innerHTML = '<span class="loading-spinner"></span> Verifying...';
 
         try {
             const qrData = JSON.parse(decodedText);
@@ -206,15 +360,11 @@
 
             const now = new Date();
             
-            // ✅ Check monthly holiday first
             const isHoliday = await isMonthlyHoliday(currentStaffId, now);
-            if (isHoliday) {
-                throw new Error('Today is a monthly holiday. No attendance required.');
-            }
+            if (isHoliday) throw new Error('Monthly holiday – No attendance required');
             
-            // ✅ Check approved leave
             const onLeave = await isOnLeave(currentStaffId, now);
-            if (onLeave) throw new Error('You are on approved leave. No attendance required.');
+            if (onLeave) throw new Error('Approved leave – No attendance required');
 
             const { bonus, penalty, status, allowed, message } = calculateBonusPenalty(now);
             if (!allowed) throw new Error(message);
@@ -246,22 +396,17 @@
 
             const staffRef = db.collection('staff').doc(session.staffId);
             const staffDoc = await staffRef.get();
-            const currentTotalDays = staffDoc.data()?.totalDays || 0;
-            const currentTotalBonus = staffDoc.data()?.totalBonus || 0;
-            const currentTotalPenalty = staffDoc.data()?.totalPenalty || 0;
-            const currentTotalPresent = staffDoc.data()?.totalPresent || 0;
-
             await staffRef.update({
                 isPresentToday: true,
-                totalDays: currentTotalDays + 1,
-                totalPresent: currentTotalPresent + 1,
-                totalBonus: currentTotalBonus + bonus,
-                totalPenalty: currentTotalPenalty + penalty,
+                totalDays: (staffDoc.data()?.totalDays || 0) + 1,
+                totalPresent: (staffDoc.data()?.totalPresent || 0) + 1,
+                totalBonus: (staffDoc.data()?.totalBonus || 0) + bonus,
+                totalPenalty: (staffDoc.data()?.totalPenalty || 0) + penalty,
                 lastTime: time,
                 lastDate: date,
             });
 
-            resultDiv.innerHTML = '✅ Attendance marked successfully!';
+            resultDiv.innerHTML = `✅ Attendance marked!<br>📅 ${dateDisplay}<br>⏰ ${time}<br>📊 ${status}<br>💰 Daily Earning: ₹${dailyEarning}`;
             resultDiv.className = 'result success';
         } catch (err) {
             console.error(err);
@@ -274,7 +419,7 @@
                 startScanner();
                 resultDiv.style.display = 'none';
             }
-        }, 3000);
+        }, 4000);
     }
 
     function onScanError(err) { console.log(err); }
@@ -313,6 +458,7 @@
     function logout() {
         stopScanner();
         currentStaffId = null;
+        currentStaffName = null;
         document.getElementById('loginView').style.display = 'block';
         document.getElementById('scannerView').style.display = 'none';
         document.getElementById('phoneInput').value = '';
@@ -326,13 +472,15 @@
         const btn = document.getElementById('loginBtn');
         const originalText = btn.innerText;
         btn.disabled = true;
-        btn.innerText = 'Verifying...';
+        btn.innerHTML = '<span class="loading-spinner"></span> Verifying...';
         try {
             if (!phone) throw new Error('Please enter phone number');
             const staffQuery = await db.collection('staff').where('phone', '==', phone).limit(1).get();
             if (staffQuery.empty) throw new Error('Phone number not registered');
             const staffDoc = staffQuery.docs[0];
             currentStaffId = staffDoc.id;
+            currentStaffName = staffDoc.data().name;
+            document.getElementById('staffNameDisplay').innerHTML = `👋 Welcome, ${currentStaffName}`;
             document.getElementById('loginView').style.display = 'none';
             document.getElementById('scannerView').style.display = 'block';
             startScanner();
@@ -349,10 +497,13 @@
             startScanner();
             const resultDiv = document.getElementById('scanResult');
             resultDiv.style.display = 'none';
-            resultDiv.className = 'result';
+            resultDiv.innerHTML = '';
         }
     };
     document.getElementById('logoutBtn').onclick = logout;
+
+    // Auto-focus on phone input
+    document.getElementById('phoneInput').focus();
 </script>
 </body>
 </html>
